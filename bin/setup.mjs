@@ -15,10 +15,13 @@ const AGG_TABLES = ["daily_overview", "daily_channels", "daily_pages", "daily_ev
 
 const HELP = `Usage:
   web-analytics setup    --project <gcp-project> [--dataset web_analytics] [--location EU]
-                         [--retention-days 425] [--lookback-days 2] [--no-schedule] [--print]
+                         [--retention-days 425] [--lookback-days 2] [--schedule-sa <email>] [--no-schedule] [--print]
   web-analytics observer --project <observer-project> --sites <proj.dataset,proj.dataset,...>
                          [--dataset all_sites] [--location EU] [--print]
 
+  --schedule-sa  service account that runs the hourly aggregation (needs BigQuery Job User on the
+                 project and Data Editor on the dataset). Without it the scheduled query is skipped,
+                 because bq would need an interactive browser consent.
   --print   only print the SQL, do not run anything.
 Requires the bq CLI (Google Cloud SDK) logged in as someone who can create datasets.`;
 
@@ -92,7 +95,10 @@ function setup(o) {
   runQuery(project, location, functions, "session and funnel functions");
   runQuery(project, location, aggregates, "daily aggregate tables (first run)");
 
-  if (o.schedule !== false) {
+  if (o.schedule !== false && typeof o["schedule-sa"] !== "string") {
+    console.log("• hourly scheduled query … skipped (pass --schedule-sa <service-account-email> to create it)");
+  } else if (o.schedule !== false) {
+    const sa = check(o["schedule-sa"], /^[a-z0-9-]+@[a-z0-9-]+\.iam\.gserviceaccount\.com$/, "schedule-sa");
     process.stdout.write("• hourly scheduled query … ");
     const res = bq([
       `--project_id=${project}`,
@@ -102,12 +108,13 @@ function setup(o) {
       "--data_source=scheduled_query",
       `--display_name=web-analytics aggregates (${dataset})`,
       "--schedule=every 1 hours",
+      `--service_account_name=${sa}`,
       `--params=${JSON.stringify({ query: aggregates })}`,
     ]);
     if (res.status !== 0) {
       console.log("skipped");
       console.error((res.stderr || res.stdout).trim());
-      console.error("Enable the BigQuery Data Transfer API (bigquerydatatransfer.googleapis.com) and re-run, or create the scheduled query in the console from `--print` output.");
+      console.error("Check that the BigQuery Data Transfer API is enabled and that you can act as the service account (roles/iam.serviceAccountUser), or create the scheduled query in the console from `--print` output.");
     } else console.log("ok");
   }
 

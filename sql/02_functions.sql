@@ -100,13 +100,13 @@ CREATE OR REPLACE TABLE FUNCTION `{{project}}.{{dataset}}.funnel`(steps ARRAY<ST
     WHERE (STARTS_WITH(step, 'pageview:') AND a.event = 'pageview' AND STARTS_WITH(a.path, SUBSTR(step, 10)))
        OR (NOT STARTS_WITH(step, 'pageview:') AND a.event = step)
   ),
-  depth AS (
+  reached AS (
     SELECT site, session_key, ANY_VALUE(entry_channel) AS entry_channel,
       `{{project}}.{{dataset}}.funnel_depth`(ARRAY_AGG(CAST(idx AS FLOAT64) ORDER BY ts, idx)) AS depth
     FROM hits GROUP BY site, session_key
   )
   SELECT site, IFNULL(entry_channel, 'direct') AS entry_channel, n + 1 AS step_number, steps[OFFSET(n)] AS step,
     COUNTIF(depth > n) AS sessions
-  FROM depth, UNNEST(GENERATE_ARRAY(0, ARRAY_LENGTH(steps) - 1)) AS n
+  FROM reached, UNNEST(GENERATE_ARRAY(0, ARRAY_LENGTH(steps) - 1)) AS n
   GROUP BY site, entry_channel, step_number, step
 );
