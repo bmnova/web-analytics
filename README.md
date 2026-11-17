@@ -135,6 +135,7 @@ Then follow [docs/dashboard.md](docs/dashboard.md).
 
 ## Docs
 - **[Add a site, step by step](docs/add-a-site.md)**: start here
+- **[Prompt for an AI coding agent](docs/agent-prompt.md)**: paste it into Claude Code or Cursor to do step 2 for you
 - [Next.js on Vercel](docs/nextjs-vercel.md)
 - [Next.js on Cloudflare (OpenNext)](docs/nextjs-cloudflare.md)
 - [Consent and privacy](docs/consent-and-privacy.md)

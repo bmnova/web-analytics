@@ -58,6 +58,8 @@ You need `gcloud` and `bq` (Google Cloud SDK), logged in as a project owner.
 
 ## 2. Install the package in the site
 
+> Using an AI coding agent? Paste [agent-prompt.md](agent-prompt.md) into it instead of following this step by hand.
+
 ```bash
 npm i @bmnova/web-analytics      # or pnpm add / yarn add
 ```
