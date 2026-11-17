@@ -134,6 +134,7 @@ npx @bmnova/web-analytics observer --project my-observer --sites site-a.web_anal
 Then follow [docs/dashboard.md](docs/dashboard.md).
 
 ## Docs
+- **[Add a site, step by step](docs/add-a-site.md)**: start here
 - [Next.js on Vercel](docs/nextjs-vercel.md)
 - [Next.js on Cloudflare (OpenNext)](docs/nextjs-cloudflare.md)
 - [Consent and privacy](docs/consent-and-privacy.md)

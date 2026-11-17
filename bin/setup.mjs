@@ -143,14 +143,12 @@ function setup(o) {
   }
 
   console.log(`
-Next steps (run these yourself; this tool never creates or downloads keys):
-  1. Create a writer service account:
-       gcloud iam service-accounts create web-analytics-writer --project=${project}
-  2. Let it insert rows into this dataset only (BigQuery console → ${dataset} → Sharing → Permissions →
-     add web-analytics-writer@${project}.iam.gserviceaccount.com as "BigQuery Data Editor").
-  3. Create a JSON key for it and store the file contents as the WA_GCP_SA_KEY secret on your host
-     (Vercel env var / \`wrangler secret put WA_GCP_SA_KEY\`). Do not commit the file; delete it afterwards.
-  4. Set WA_BQ_PROJECT=${project}, WA_BQ_DATASET=${dataset}, WA_SITE, WA_SALT_SECRET (openssl rand -hex 32).`);
+Next steps (see docs/add-a-site.md for the full guide):
+  • Grant web-analytics-writer and web-analytics-scheduler "BigQuery Data Editor" on ${project}.${dataset},
+    and the scheduler "BigQuery Job User" on the project; then re-run with --schedule-sa to schedule the aggregation.
+  • Store the writer key and settings on your host without printing them:
+      scripts/push-secrets.sh vercel|cloudflare ${project} <site> <site-dir>
+    (Never commit key files.)`);
 }
 
 function observer(o) {
