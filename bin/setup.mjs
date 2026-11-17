@@ -99,6 +99,29 @@ function setup(o) {
     console.log("• hourly scheduled query … skipped (pass --schedule-sa <service-account-email> to create it)");
   } else if (o.schedule !== false) {
     const sa = check(o["schedule-sa"], /^[a-z0-9-]+@[a-z0-9-]+\.iam\.gserviceaccount\.com$/, "schedule-sa");
+    const displayName = `web-analytics aggregates (${dataset})`;
+    const existing = bq(["--format=json", `--project_id=${project}`, "ls", "--transfer_config", `--transfer_location=${location}`]);
+    let already = false;
+    try {
+      already = JSON.parse(existing.stdout || "[]").some((c) => c.displayName === displayName);
+    } catch {
+      // listing failed; try to create
+    }
+    // The BigQuery Data Transfer service agent must be able to act as the scheduler account.
+    const num = spawnSync("gcloud", ["projects", "describe", project, "--format=value(projectNumber)"], { encoding: "utf8" });
+    const projectNumber = num.status === 0 ? num.stdout.trim() : null;
+    if (projectNumber) {
+      process.stdout.write("• let the transfer service act as the scheduler … ");
+      const g = spawnSync("gcloud", [
+        "iam", "service-accounts", "add-iam-policy-binding", sa, `--project=${sa.split("@")[1].split(".")[0]}`,
+        `--member=serviceAccount:service-${projectNumber}@gcp-sa-bigquerydatatransfer.iam.gserviceaccount.com`,
+        "--role=roles/iam.serviceAccountTokenCreator", "--format=none",
+      ], { encoding: "utf8" });
+      console.log(g.status === 0 ? "ok" : `failed (${(g.stderr || "").trim().split("\n").pop()})`);
+    }
+    if (already) {
+      console.log("• hourly scheduled query … already exists, kept");
+    } else {
     process.stdout.write("• hourly scheduled query … ");
     const res = bq([
       `--project_id=${project}`,
@@ -106,7 +129,7 @@ function setup(o) {
       "mk",
       "--transfer_config",
       "--data_source=scheduled_query",
-      `--display_name=web-analytics aggregates (${dataset})`,
+      `--display_name=${displayName}`,
       "--schedule=every 1 hours",
       `--service_account_name=${sa}`,
       `--params=${JSON.stringify({ query: aggregates })}`,
@@ -116,6 +139,7 @@ function setup(o) {
       console.error((res.stderr || res.stdout).trim());
       console.error("Check that the BigQuery Data Transfer API is enabled and that you can act as the service account (roles/iam.serviceAccountUser), or create the scheduled query in the console from `--print` output.");
     } else console.log("ok");
+    }
   }
 
   console.log(`
