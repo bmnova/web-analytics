@@ -154,6 +154,12 @@ export function extractScriptUrls(html, pageUrl) {
   return [...urls];
 }
 
+/** Same site, allowing only a www. difference (example.com ↔ www.example.com). */
+export function sameSite(hostA, hostB) {
+  const strip = (h) => String(h).toLowerCase().replace(/^www\./, "");
+  return strip(hostA) === strip(hostB);
+}
+
 /** True when a JS bundle contains the web-analytics tracker. */
 export function hasTrackerSignature(js) {
   const s = String(js);
@@ -407,6 +413,15 @@ async function checkLive(ctx) {
     return [{ status: "fail", label: "page", detail: `could not load ${url.href} (${e.name === "TimeoutError" ? "timeout" : e.message})` }];
   }
   const finalUrl = new URL(res.url || url.href);
+  // A redirect to another site (Vercel SSO / Deployment Protection, a login page) is not this site:
+  // checking the tracker and collector there would test the wrong thing.
+  if (!sameSite(url.host, finalUrl.host)) {
+    return [{
+      status: "fail", label: "page",
+      detail: `redirected to another site: ${finalUrl.origin}${finalUrl.pathname}`,
+      fix: "The URL is behind a login (e.g. Vercel Deployment Protection on previews). Use the public URL, or allow access for this check (Vercel: Protection Bypass for Automation).",
+    }];
+  }
   results.push(res.ok
     ? { status: "pass", label: "page", detail: `${res.status} ${finalUrl.href}${finalUrl.href !== url.href ? " (after redirect)" : ""}` }
     : { status: "fail", label: "page", detail: `HTTP ${res.status} ${finalUrl.href}` });
