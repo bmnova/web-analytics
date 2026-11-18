@@ -22,6 +22,8 @@ const HELP = `Usage:
                          [--stale-hours 6] [--no-health-check] [--print]
   web-analytics observer --project <observer-project> --sites <proj.dataset,proj.dataset,...>
                          [--dataset all_sites] [--location EU] [--print]
+  web-analytics doctor   [--url https://example.com] [--vercel] [--dir .] [--project <gcp-project>]
+                         checks a site's env, code, live collector and BigQuery data (--help for more)
 
   --schedule-sa  service account that runs the hourly aggregation (needs BigQuery Job User on the
                  project and Data Editor on the dataset). Without it the scheduled query is skipped,
@@ -287,6 +289,7 @@ const o = args(process.argv.slice(2));
 const cmd = o._[0];
 if (cmd === "setup") await setup(o);
 else if (cmd === "observer") observer(o);
+else if (cmd === "doctor") process.exitCode = await (await import("./doctor.mjs")).main(process.argv.slice(3));
 else {
   console.log(HELP);
   process.exit(cmd ? 1 : 0);
