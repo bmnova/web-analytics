@@ -27,8 +27,9 @@ const HELP = `Usage:
                  project and Data Editor on the dataset). Without it the scheduled query is skipped,
                  because bq would need an interactive browser consent. Re-running setup points an
                  existing scheduled query at the current SQL.
-  --stale-hours  with --schedule-sa, a second scheduled query (every 3 hours) fails, and BigQuery emails
-                 you, when no human event arrived in this many hours. --no-health-check skips it.
+  --stale-hours  a second scheduled query (every 3 hours), owned by your own Google account, fails and
+                 BigQuery emails you when no human event arrived in this many hours. Creating it asks
+                 for a one-time browser consent, so run setup in a terminal. --no-health-check skips it.
   --print   only print the SQL, do not run anything.
 Requires the bq CLI (Google Cloud SDK) logged in as someone who can create datasets.`;
 
@@ -90,34 +91,38 @@ function listTransfers(project, location) {
   }
 }
 
-// Failed runs email the config's owner only when emailPreferences.enableFailureEmail is set,
-// and bq has no flag for it, so set it through the Data Transfer REST API with the gcloud login.
-async function enableFailureEmail(name) {
+// Data Transfer REST call with the gcloud login (bq has no flag for email preferences or owner info).
+async function transferApi(method, name, query = "", body) {
   const tok = spawnSync("gcloud", ["auth", "print-access-token"], { encoding: "utf8" });
-  if (tok.status !== 0) return "could not get a gcloud access token";
-  const url = `https://bigquerydatatransfer.googleapis.com/v1/${name}?updateMask=email_preferences`;
+  if (tok.status !== 0) return { error: "could not get a gcloud access token" };
   try {
-    const res = await fetch(url, {
-      method: "PATCH",
+    const res = await fetch(`https://bigquerydatatransfer.googleapis.com/v1/${name}${query}`, {
+      method,
       headers: { authorization: `Bearer ${tok.stdout.trim()}`, "content-type": "application/json" },
-      body: JSON.stringify({ emailPreferences: { enableFailureEmail: true } }),
+      body: body && JSON.stringify(body),
     });
-    return res.ok ? null : `HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`;
+    if (!res.ok) return { error: `HTTP ${res.status}: ${(await res.text()).slice(0, 300)}` };
+    return { data: await res.json() };
   } catch (e) {
-    return e.message;
+    return { error: e.message };
   }
 }
 
+const isServiceAccount = (email) => typeof email === "string" && email.endsWith(".gserviceaccount.com");
+
 // Creates the scheduled query, or points an existing one (same display name) at the current SQL
 // so re-running setup after an upgrade also fills new tables. Never deletes a config.
+// sa = null creates it under your own Google account: bq then prints a consent URL and asks for
+// the version_info code, so this needs an interactive terminal.
 async function scheduledQuery({ project, location, sa }, { label, displayName, schedule, query, failureEmail }) {
   process.stdout.write(`• ${label} … `);
-  const found = listTransfers(project, location)?.find((c) => c.displayName === displayName);
+  const find = () => listTransfers(project, location)?.find((c) => c.displayName === displayName);
+  const found = find();
   let res;
   if (found) {
     res = bq(["--quiet", `--project_id=${project}`, "update", "--transfer_config", `--params=${JSON.stringify({ query })}`, found.name]);
   } else {
-    res = bq([
+    const mk = [
       `--project_id=${project}`,
       `--location=${location}`,
       "mk",
@@ -125,21 +130,44 @@ async function scheduledQuery({ project, location, sa }, { label, displayName, s
       "--data_source=scheduled_query",
       `--display_name=${displayName}`,
       `--schedule=${schedule}`,
-      `--service_account_name=${sa}`,
+      ...(sa ? [`--service_account_name=${sa}`] : []),
       `--params=${JSON.stringify({ query })}`,
-    ]);
+    ];
+    if (sa) res = bq(mk);
+    else if (!process.stdin.isTTY) {
+      console.log("skipped (needs an interactive terminal for the Google consent step)");
+      console.log(`  Run setup again in a terminal, or create it in the console: BigQuery → Scheduled queries → Create,
+  name "${displayName}", ${schedule}, no service account, tick "Send email notifications", SQL from --print.`);
+      return;
+    } else {
+      console.log("\n  Open the URL bq prints, allow access with the Google account that should get the emails,\n  and paste the code back here.");
+      res = spawnSync("bq", mk, { stdio: "inherit" });
+      if (res.error) fail(`could not run bq (${res.error.message})`);
+      process.stdout.write(`• ${label} … `);
+    }
   }
   if (res.status !== 0) {
     console.log("skipped");
-    console.error((res.stderr || res.stdout).trim());
-    console.error("Check that the BigQuery Data Transfer API is enabled and that you can act as the service account (roles/iam.serviceAccountUser), or create the scheduled query in the console from `--print` output.");
+    if (res.stderr || res.stdout) console.error((res.stderr || res.stdout).trim());
+    console.error(sa
+      ? "Check that the BigQuery Data Transfer API is enabled and that you can act as the service account (roles/iam.serviceAccountUser), or create the scheduled query in the console from `--print` output."
+      : "Create it in the console instead (BigQuery → Scheduled queries → Create) from `--print` output.");
     return;
   }
   let note = found ? "updated to the current SQL" : "created";
   if (failureEmail) {
-    const name = found?.name ?? listTransfers(project, location)?.find((c) => c.displayName === displayName)?.name;
-    const err = name ? await enableFailureEmail(name) : "config not found after creating it";
-    note += err ? `; failure email NOT enabled (${err}) — tick "Send email notifications" on it in the console` : "; failure email on";
+    const name = (found ?? find())?.name;
+    if (!name) note += "; failure email NOT enabled (config not found after creating it)";
+    else {
+      // Failure emails go to the config's owner, so a service-account owner means nobody is told.
+      const { data } = await transferApi("GET", name);
+      const owner = data?.ownerInfo?.email;
+      const { error } = await transferApi("PATCH", name, "?updateMask=email_preferences", { emailPreferences: { enableFailureEmail: true } });
+      if (error) note += `; failure email NOT enabled (${error}) — tick "Send email notifications" on it in the console`;
+      else if (isServiceAccount(owner)) {
+        note += `; WARNING: owned by ${owner}, so failure emails reach nobody. Delete it (bq rm --transfer_config ${name}) and re-run setup in a terminal`;
+      } else note += `; failure email on${owner ? ` → ${owner}` : ""}`;
+    }
   }
   console.log(`ok (${note})`);
 }
@@ -191,19 +219,25 @@ async function setup(o) {
       ], { encoding: "utf8" });
       console.log(g.status === 0 ? "ok" : `failed (${(g.stderr || "").trim().split("\n").pop()})`);
     }
-    const sq = { project, location, sa };
-    await scheduledQuery(sq, { label: "hourly scheduled query", displayName: `web-analytics aggregates (${dataset})`, schedule: "every 1 hours", query: aggregates });
-    if (healthCheck) {
-      await scheduledQuery(sq, {
-        label: `health check (no human events for ${stale_hours}h → failure email)`,
-        displayName: `web-analytics health (${dataset})`,
-        schedule: HEALTH_SCHEDULE,
-        query: health,
-        failureEmail: true,
-      });
-    } else {
-      console.log("• health check … skipped (--no-health-check)");
-    }
+    await scheduledQuery({ project, location, sa }, {
+      label: "hourly scheduled query", displayName: `web-analytics aggregates (${dataset})`, schedule: "every 1 hours", query: aggregates,
+    });
+  }
+
+  // The health check runs as you, not as the scheduler account: BigQuery emails failures to the
+  // scheduled query's owner, and a service account has no inbox.
+  if (o.schedule === false) {
+    // --no-schedule: no scheduled queries at all
+  } else if (!healthCheck) {
+    console.log("• health check … skipped (--no-health-check)");
+  } else {
+    await scheduledQuery({ project, location, sa: null }, {
+      label: `health check (no human events for ${stale_hours}h → failure email to you)`,
+      displayName: `web-analytics health (${dataset})`,
+      schedule: HEALTH_SCHEDULE,
+      query: health,
+      failureEmail: true,
+    });
   }
 
   console.log(`
