@@ -29,6 +29,18 @@ CREATE TABLE IF NOT EXISTS `{{project}}.{{dataset}}.daily_bots` (
   day DATE, site STRING, bot_kind STRING, bot_name STRING, path STRING, country STRING, requests INT64
 ) PARTITION BY day CLUSTER BY site, bot_kind;
 
+-- Human visitors by where they are and what they use. visitors = distinct visitor_key per
+-- session start day, the same definition as daily_overview (so summing over every country,
+-- device, browser and os can exceed daily_overview.visitors when one visitor changes device).
+CREATE TABLE IF NOT EXISTS `{{project}}.{{dataset}}.daily_audience` (
+  day DATE, site STRING, country STRING, device STRING, browser STRING, os STRING, visitors INT64, sessions INT64, pageviews INT64
+) PARTITION BY day CLUSTER BY site, country, device;
+
+-- Human sessions that arrived from an AI assistant (channel = 'ai'), by landing path.
+CREATE TABLE IF NOT EXISTS `{{project}}.{{dataset}}.daily_ai_referrals` (
+  day DATE, site STRING, path STRING, visitors INT64, sessions INT64, pageviews INT64
+) PARTITION BY day CLUSTER BY site, path;
+
 CREATE TEMP TABLE s AS SELECT * FROM `{{project}}.{{dataset}}.sessions`(d_from, d_to);
 CREATE TEMP TABLE se AS SELECT * FROM `{{project}}.{{dataset}}.sessionized_events`(d_from, d_to);
 
@@ -104,5 +116,19 @@ SELECT DATE(ts), site, bot_kind, bot_name, path, country, COUNT(*)
 FROM `{{project}}.{{dataset}}.events`
 WHERE DATE(ts) BETWEEN d_from AND d_to AND is_bot
 GROUP BY 1, 2, 3, 4, 5, 6;
+
+DELETE FROM `{{project}}.{{dataset}}.daily_audience` WHERE day BETWEEN d_from AND d_to;
+INSERT INTO `{{project}}.{{dataset}}.daily_audience`
+WITH ua AS (SELECT site, session_key, ANY_VALUE(browser) AS browser, ANY_VALUE(os) AS os FROM se GROUP BY site, session_key)
+SELECT DATE(s.started_at), s.site, s.country, s.device, ua.browser, ua.os,
+  COUNT(DISTINCT s.visitor_key), COUNT(*), SUM(s.pageviews)
+FROM s LEFT JOIN ua USING (site, session_key)
+GROUP BY 1, 2, 3, 4, 5, 6;
+
+DELETE FROM `{{project}}.{{dataset}}.daily_ai_referrals` WHERE day BETWEEN d_from AND d_to;
+INSERT INTO `{{project}}.{{dataset}}.daily_ai_referrals`
+SELECT DATE(started_at), site, entry_path, COUNT(DISTINCT visitor_key), COUNT(*), SUM(pageviews)
+FROM s WHERE entry_channel = 'ai'
+GROUP BY 1, 2, 3;
 
 COMMIT TRANSACTION;
