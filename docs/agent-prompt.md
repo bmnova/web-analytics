@@ -50,7 +50,7 @@ https://github.com/bmnova/web-analytics/blob/main/docs/add-a-site.md
 - Work on a new branch and open a pull request. Do not merge it.
 
 ## Verify locally before the PR
-Without credentials the package runs in dry-run mode and logs every row as "[web-analytics:dry-run] {...}". Run the site (on Cloudflare: wrangler dev or the OpenNext preview) and confirm:
+Without credentials the package runs in dry-run mode and logs every row as "[web-analytics:dry-run] {...}". Production builds (NODE_ENV=production, including the OpenNext preview) refuse to dry-run and the collector answers 503, so set WA_DRY_RUN=1 for those local runs. Run the site (on Cloudflare: wrangler dev or the OpenNext preview) and confirm:
 - curl -A "Mozilla/5.0 (compatible; GPTBot/1.1)" <local>/llms.txt  -> one bot_request row with bot_name GPTBot
 - opening <local>/?utm_source=chatgpt.com in a browser -> a pageview row with channel "ai" and source "chatgpt.com"
 - clicking around -> pageview and page_exit rows; your custom events appear

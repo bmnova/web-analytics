@@ -55,7 +55,11 @@ Run `web-analytics setup … --schedule-sa <email>` again. It creates the new ta
   ```
 - **Same filters on every page:** add a *date range control* and a *drop-down list* on `site`, select each one, then *Arrange → Make report-level*. The site control filters every view because they all have a `site` field.
 - **Averages:** set the aggregation of `avg_session_sec`, `avg_engaged_sec` and `avg_scroll_pct` to *Average*, not *Sum*.
-- **Empty Events page:** `daily_events` leaves out `pageview` and `page_exit`, so it stays empty until the site sends custom events (`track()`, `data-track`, `trackServer()`).
+- **Empty Events page:** `daily_events` leaves out only `pageview` and `page_exit`; automatic events (`contact_click`, `outbound_click`, `file_download`, `form_submit`, client `error`) and custom events are included. Browser events come from `sessionized_events`, which keeps only rows with `via = 'client'`, `NOT is_bot` and a visitor key (`visitor_id` or `visitor_hash`). If the page is empty:
+  - `WA_SALT_SECRET` is missing, so `visitor_hash` is null and every `basic`-consent event is dropped (only visitors who accepted the banner remain);
+  - the site was dry-running in production (no rows at all; the collector now answers 503 there);
+  - the visitors are flagged as bots (headless checkers, `curl`);
+  - the scheduled query has not run since the events arrived (hourly), or the date range is outside its lookback.
 
 ## Freshness and cost
 - **Freshness:** aggregates refresh hourly; raw `events` are real time if you query them directly.

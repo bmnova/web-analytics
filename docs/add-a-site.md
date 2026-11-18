@@ -258,7 +258,8 @@ DELETE FROM `<project>.web_analytics.events` WHERE utm_campaign = 'wa-test' OR u
 
 | Symptom | Fix |
 |---|---|
-| `[web-analytics:dry-run]` lines in logs | `WA_GCP_SA_KEY` or `WA_BQ_PROJECT` is missing on the host |
+| `[web-analytics:dry-run]` lines in logs | `WA_GCP_SA_KEY` or `WA_BQ_PROJECT` is missing on a non-production host, or `WA_DRY_RUN` is set |
+| `/api/collect` returns 503 with `x-web-analytics-error: missing-config: …` | production deployment without the named variable(s), or `WA_GCP_SA_KEY` is not valid JSON; set it and redeploy |
 | `/api/collect` returns 403 | the page's origin differs from the request host (www vs apex, custom domain); set `WA_ALLOWED_ORIGINS` |
 | `visitor_hash` is always null | `WA_SALT_SECRET` is missing, or you tested with a bot user agent such as plain `curl` |
 | no rows for `robots.txt` on Cloudflare | the file is still in `public/`; see step 2d |
