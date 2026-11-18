@@ -17,6 +17,7 @@ This design aims to need no banner for basic mode, but the legal assessment depe
 ## Things you must still do
 - **Update your privacy policy.** The template below is a starting point.
 - **Keep sensitive data out of events.** Never send amounts, revenue, file contents or personal data in event props. The deny-list catches common key names but cannot know your domain.
+- **Normalize paths that carry ids.** If your URLs contain record ids (shared cards, invoices, user pages), pass the same `normalizePath` to `withAnalytics`, `createCollectHandler`, `trackServer` and `createOnRequestError`, and set `keepTitle: false` on the collector if page titles carry names or ids. See "Paths with ids" in the README. Known limitation: error rows keep the first 200 characters of the error message; `normalizePath` does not touch it, so do not put ids or personal data in thrown error messages.
 - **Session replay needs care.** If you enable it, configure masking in Clarity (mask all inputs and any sensitive numbers), and do not enable it on pages whose promise is "your data stays on your device".
 
 ## Privacy policy template (adapt)

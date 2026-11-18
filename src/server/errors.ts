@@ -1,12 +1,19 @@
 import { getConfig, type WaEnv } from "./env.js";
 import { writeRows } from "./bigquery.js";
 import { defer } from "./defer.js";
-import { buildRow, resolveSite } from "./rows.js";
+import { buildRow, resolveSite, type NormalizePath } from "./rows.js";
 
 interface RequestInfo {
   path: string;
   method: string;
   headers: Record<string, string | string[] | undefined> | Headers;
+}
+
+export interface OnRequestErrorOptions {
+  site?: string;
+  env?: WaEnv;
+  /** Rewrite the stored path, e.g. to replace record ids. `props.route` (Next's route pattern) is untouched. */
+  normalizePath?: NormalizePath;
 }
 
 interface ErrorContext {
@@ -27,7 +34,7 @@ function toHeaders(h: RequestInfo["headers"]): Headers {
  *   export const onRequestError = createOnRequestError();
  * Stores only the message (truncated), digest and route, never stack traces or request bodies.
  */
-export function createOnRequestError(options: { site?: string; env?: WaEnv } = {}) {
+export function createOnRequestError(options: OnRequestErrorOptions = {}) {
   return async function onRequestError(error: unknown, request: RequestInfo, context: ErrorContext = {}) {
     try {
       const config = getConfig(options.env);
@@ -42,6 +49,7 @@ export function createOnRequestError(options: { site?: string; env?: WaEnv } = {
           path: request.path,
           host: headers.get("host"),
           headers,
+          normalizePath: options.normalizePath,
           props: {
             message: (err?.message ?? String(error)).slice(0, 200),
             error_name: err?.name ?? null,

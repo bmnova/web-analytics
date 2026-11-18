@@ -2,7 +2,7 @@ import { detectBot } from "../shared/bots.js";
 import { getConfig, type WaEnv } from "./env.js";
 import { writeRows } from "./bigquery.js";
 import { defer, type WaitUntilLike } from "./defer.js";
-import { buildRow, resolveSite } from "./rows.js";
+import { buildRow, resolveSite, type NormalizePath } from "./rows.js";
 
 type MaybePromise<T> = T | Promise<T>;
 // Kept structural so the package does not import Next at runtime.
@@ -19,6 +19,8 @@ export interface AnalyticsProxyOptions {
   logBots?: boolean;
   /** Skip paths, e.g. health checks. The collector endpoint is always skipped. */
   ignore?: (pathname: string) => boolean;
+  /** Rewrite stored paths, e.g. to replace record ids. Runs after bot detection and `ignore`. */
+  normalizePath?: NormalizePath;
 }
 
 const STATIC = /^\/(_next\/|favicon\.ico$)/;
@@ -58,6 +60,7 @@ export function withAnalytics<Req extends RequestLike, Ev>(inner?: InnerHandler<
                 headers: req.headers,
                 bot,
                 props: { method: req.method },
+                normalizePath: options.normalizePath,
               });
               await writeRows(config, [row]);
             }, waitable);

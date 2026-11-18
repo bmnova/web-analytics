@@ -2,7 +2,7 @@ import type { Props } from "../shared/schema.js";
 import { getConfig, type WaEnv } from "./env.js";
 import { writeRows } from "./bigquery.js";
 import { defer } from "./defer.js";
-import { buildRow, resolveSite } from "./rows.js";
+import { buildRow, resolveSite, type NormalizePath } from "./rows.js";
 
 export interface TrackServerOptions {
   userId?: string | null;
@@ -13,6 +13,8 @@ export interface TrackServerOptions {
   env?: WaEnv;
   /** Wait for the write to finish instead of deferring it (e.g. in scripts). */
   await?: boolean;
+  /** Rewrite the stored path, e.g. to replace record ids. Pass the same function everywhere. */
+  normalizePath?: NormalizePath;
 }
 
 /**
@@ -34,6 +36,7 @@ export async function trackServer(event: string, props: Props = {}, options: Tra
       userId: options.userId,
       headers: options.request?.headers ?? null,
       bot: null,
+      normalizePath: options.normalizePath,
     });
     await writeRows(config, [row]);
   };

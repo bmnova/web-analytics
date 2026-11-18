@@ -22,6 +22,7 @@ https://github.com/bmnova/web-analytics/blob/main/docs/add-a-site.md
 - Signed-in users: none | <auth provider>, e.g. Supabase / NextAuth / Clerk
 - Important server events (optional): e.g. payment webhook -> subscription_started, import -> file_imported
 - Funnel / custom events (optional): e.g. signup_started, signed_up, checkout_started
+- Ids or names in paths/titles: none | e.g. /r/<cardId>, /u/<username>; titles show user names  <- if unsure, ask me before step 9
 - Session replay (Clarity): off                       <- leave off unless you really need it
 
 ## Do (guide step 2)
@@ -36,7 +37,8 @@ https://github.com/bmnova/web-analytics/blob/main/docs/add-a-site.md
 6. If there are signed-in users, call identify(user.id) after sign-in and identify(null) on sign-out.
 7. Add the listed events: data-track for buttons, track() in client code, trackServer() for server steps and webhooks.
 8. Next 15+: add createOnRequestError({ site }) in instrumentation.ts.
-9. Update the privacy policy using docs/consent-and-privacy.md. It must describe both levels:
+9. If paths or titles carry ids or personal names (ask me if the values above do not say): write one exported normalizePath(path) in a shared module (e.g. lib/analytics-path.ts) that replaces those segments with placeholders, and pass it to withAnalytics, createCollectHandler, trackServer and createOnRequestError. Add keepTitle: false to createCollectHandler if titles carry names or ids.
+10. Update the privacy policy using docs/consent-and-privacy.md. It must describe both levels:
    - no consent: nothing stored on the device, visitors counted with a daily-rotating hash, IP never stored
    - consent: a persistent random id
    Remove any "no trackers" claim.

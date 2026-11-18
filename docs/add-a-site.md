@@ -165,6 +165,29 @@ import { createOnRequestError } from "@bmnova/web-analytics/server";
 export const onRequestError = createOnRequestError({ site: "<site>" });
 ```
 
+### 2f-2. Paths with ids
+
+Every row stores the page path without query string or hash. If your paths contain record ids (`/r/<cardId>`, `/invoice/<id>`), those ids are stored too. Pass `normalizePath` to rewrite them before storage:
+
+```ts
+// lib/analytics-path.ts
+export const normalizePath = (p: string) => p.replace(/^\/r\/[^/]+/, "/r/[id]");
+```
+
+```ts
+withAnalytics(myProxy, { site: "x", normalizePath });                 // proxy.ts / middleware.ts
+createCollectHandler({ site: "x", normalizePath, keepTitle: false }); // app/api/collect/route.ts
+trackServer("shared", {}, { site: "x", request, normalizePath });
+createOnRequestError({ site: "x", normalizePath });                   // instrumentation.ts
+```
+
+- Pass the **same function in all four places**: export it from one module and import it everywhere. Any entry point without it stores raw paths.
+- It only changes the stored `path`. Bot detection, the asset filter, the collector skip and `ignore` still see the raw path. Its output is cleaned again (leading `/`, no query/hash, length cap).
+- **Fail-closed:** if it throws or returns a non-string, the row is still written with `path = "/[unnormalized]"` (exported as `UNNORMALIZED_PATH`), never the raw path.
+- Referrers: only the referrer **host** is stored, never its path, so same-site referrers cannot leak ids.
+- `keepTitle: false` (collector only) stores `title` as null; use it when titles carry names or ids.
+- Not covered: error `props.message` (first 200 chars of the error message) and your own event props. Keep ids and names out of error messages and props. `props.route` on error rows is Next's route pattern and is left as is.
+
 ### 2g. Privacy policy
 
 Add an analytics paragraph to your privacy page. A template is in [consent-and-privacy.md](consent-and-privacy.md). If the page currently says "no trackers", change that.
