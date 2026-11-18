@@ -26,6 +26,31 @@ export interface RowInput {
   headers?: Headers | null;
   /** Pre-detected bot, to avoid re-parsing. */
   bot?: Bot | null;
+  /** Rewrites the stored path (e.g. ids to placeholders). See {@link NormalizePath}. */
+  normalizePath?: NormalizePath;
+}
+
+/**
+ * Rewrites a cleaned path (no query or hash) before it is stored, e.g.
+ * `(p) => p.replace(/^\/r\/[^/]+/, "/r/[id]")`. Only the stored value changes; bot detection,
+ * asset filtering and `ignore` still see the raw path.
+ */
+export type NormalizePath = (path: string) => string;
+
+/** Stored as `path` when `normalizePath` throws or returns a non-string. The raw path is never stored then. */
+export const UNNORMALIZED_PATH = "/[unnormalized]";
+
+/** Clean a path, then run it through `normalize` (fail-closed). */
+export function storedPath(path: string | null | undefined, normalize?: NormalizePath): string | null {
+  const clean = cleanPath(path);
+  if (clean === null || !normalize) return clean;
+  try {
+    const out = normalize(clean);
+    if (typeof out !== "string") return UNNORMALIZED_PATH;
+    return cleanPath(out.startsWith("/") ? out : `/${out}`) ?? UNNORMALIZED_PATH;
+  } catch {
+    return UNNORMALIZED_PATH;
+  }
 }
 
 const str = (v: string | null | undefined, max: number) => (v ? v.slice(0, max) : null);
@@ -64,7 +89,7 @@ export async function buildRow(config: WaConfig, input: RowInput): Promise<Event
     user_id: id(input.userId),
     consent: input.consent ?? null,
     host,
-    path: cleanPath(input.path),
+    path: storedPath(input.path, input.normalizePath),
     title: str(input.title, LIMITS.titleLength),
     referrer_host: referrerHost,
     channel: input.via === "server" && !input.referrer && !input.utm ? null : channel,

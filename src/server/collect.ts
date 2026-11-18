@@ -3,13 +3,17 @@ import { LIMITS, type ClientEvent, type Consent } from "../shared/schema.js";
 import { getConfig, type WaEnv } from "./env.js";
 import { writeRows } from "./bigquery.js";
 import { defer } from "./defer.js";
-import { buildRow, resolveSite } from "./rows.js";
+import { buildRow, resolveSite, type NormalizePath } from "./rows.js";
 
 export interface CollectOptions {
   /** Site label; defaults to WA_SITE, then the request host. */
   site?: string;
   /** Env overrides (e.g. Cloudflare bindings). Defaults to process.env. */
   env?: WaEnv;
+  /** Rewrite stored paths, e.g. to replace record ids. Pass the same function everywhere. */
+  normalizePath?: NormalizePath;
+  /** Store page titles (default true). Set false when titles can carry names or ids. */
+  keepTitle?: boolean;
 }
 
 const noContent = () => new Response(null, { status: 204 });
@@ -94,7 +98,7 @@ export function createCollectHandler(options: CollectOptions = {}) {
             ts: e.ts,
             path: e.path,
             host,
-            title: e.title,
+            title: options.keepTitle === false ? null : e.title,
             referrer: e.referrer,
             utm: e.utm,
             props: e.props,
@@ -104,6 +108,7 @@ export function createCollectHandler(options: CollectOptions = {}) {
             userId: e.user_id,
             headers: req.headers,
             bot,
+            normalizePath: options.normalizePath,
           }),
         ),
       );
