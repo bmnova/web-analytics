@@ -85,6 +85,7 @@ The tracker records these without any code. They land in `daily_events` like cus
 | `form_submit` | any form submit (capture phase, so it fires even if your handler calls `preventDefault`) | `form` (the form's `id`, else `name`), `action` (path for same-origin, host only for other origins) |
 | `error` | uncaught browser errors and unhandled rejections (`trackErrors: false` to turn off) | `message` (200 chars), `source` file name, `line` |
 
+- `file_download` only sees real links. Downloads built in JavaScript (a `blob:` or `data:` URL, e.g. a generated CSV) are not caught; send them yourself: `track("file_download", { ext: "csv", path: location.pathname })`.
 - `form_submit` never reads field values. Add `data-track-ignore` to a form (or a wrapper) to skip it, e.g. login or search forms.
 - An element with `data-track` wins over the automatic click events.
 - `pageview` and `page_exit` are left out of `daily_events`; they feed `daily_pages` instead.
@@ -145,7 +146,13 @@ See [.env.example](.env.example). Without `WA_GCP_SA_KEY` or `WA_BQ_PROJECT` the
 - `/api/collect` answers **503** with `x-web-analytics-error: missing-config: WA_GCP_SA_KEY, WA_BQ_PROJECT`, visible in the browser's network tab,
 - the proxy, `trackServer` and `onRequestError` drop rows instead of printing them.
 
-Pages, the proxy and the build keep working; nothing throws. Set `WA_DRY_RUN=1` to dry-run on purpose (for example in `opennextjs-cloudflare preview` or a production-mode staging build). Requests with bot user agents (including `curl`) are flagged `is_bot` and never get a `visitor_hash`; test with a browser user agent.
+Pages, the proxy and the build keep working; nothing throws. Set `WA_DRY_RUN=1` to dry-run on purpose (for example in `opennextjs-cloudflare preview` or a production-mode staging build). To check the collector by hand, send one valid event; `{}` or an empty `events` array is rejected with 400 (that is also how `doctor` checks it without writing anything):
+```bash
+curl -si -X POST http://localhost:3000/api/collect -H 'origin: http://localhost:3000' -H 'content-type: application/json' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36' \
+  -d '{"events":[{"event":"pageview","path":"/","consent":"basic"}]}'
+```
+It answers 204 (dry-run prints the row; with credentials it is written to BigQuery, so do this locally). Requests with bot user agents (including `curl`) are flagged `is_bot` and never get a `visitor_hash`; test with a browser user agent.
 
 | Var | |
 |---|---|

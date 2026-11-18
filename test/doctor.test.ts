@@ -5,7 +5,7 @@ import { detectBot } from "../src/shared/bots";
 
 const {
   parseArgs, parseDotenv, checkServiceAccountKey, parseVercelEnvNames, classifyCollect,
-  extractScriptUrls, hasTrackerSignature, hasAnalyticsComponent, siteLabelFromCode, formatReport, exitCode, UA,
+  extractScriptUrls, hasTrackerSignature, sameSite, hasAnalyticsComponent, siteLabelFromCode, formatReport, exitCode, UA,
 } = doctor as Record<string, any>;
 
 const PRIVATE = "-----BEGIN PRIVATE KEY-----\nSECRETSECRET\n-----END PRIVATE KEY-----\n";
@@ -83,6 +83,13 @@ describe("doctor: code and live helpers", () => {
     expect(classifyCollect(400).status).toBe("pass");
     expect(classifyCollect(503, "missing-config: WA_GCP_SA_KEY")).toMatchObject({ status: "fail", detail: "503 missing-config: WA_GCP_SA_KEY" });
     for (const s of [403, 404, 405, 308, 500, 204]) expect(classifyCollect(s).status).toBe("fail");
+  });
+
+  it("treats only a www. difference as the same site", () => {
+    expect(sameSite("bmnova.com", "www.bmnova.com")).toBe(true);
+    expect(sameSite("WWW.Example.com", "example.com")).toBe(true);
+    expect(sameSite("my-app-git-x.vercel.app", "vercel.com")).toBe(false);
+    expect(sameSite("example.com", "login.example.com")).toBe(false);
   });
 
   it("uses a user agent the proxy does not log as a bot", () => {
