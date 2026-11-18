@@ -1,3 +1,5 @@
+import { parseUa } from "./ua.js";
+
 export type BotKind =
   | "ai_training" // crawls content to train models
   | "ai_user" // fetches a page because a person asked an assistant
@@ -90,6 +92,18 @@ export function detectBot(userAgent: string | null | undefined): Bot | null {
   }
   if (GENERIC.test(userAgent)) return { name: "generic", kind: "other" };
   return null;
+}
+
+/**
+ * Bot check for events sent by the browser tracker. Real browsers always name an engine and an
+ * operating system in their user agent (in-app browsers too), so a client that runs our script
+ * but names neither is an automated tool: a store reviewer, link previewer or page checker.
+ */
+export function detectClientBot(userAgent: string | null | undefined): Bot | null {
+  const bot = detectBot(userAgent);
+  if (bot) return bot;
+  const info = parseUa(userAgent);
+  return !info.browser && !info.os ? { name: "unknown-client", kind: "other" } : null;
 }
 
 export const AI_BOT_KINDS: ReadonlySet<BotKind> = new Set(["ai_training", "ai_user", "ai_search"]);

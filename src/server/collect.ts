@@ -1,4 +1,4 @@
-import { detectBot } from "../shared/bots.js";
+import { detectClientBot } from "../shared/bots.js";
 import { LIMITS, type ClientEvent, type Consent } from "../shared/schema.js";
 import { getConfig, type WaEnv } from "./env.js";
 import { writeRows } from "./bigquery.js";
@@ -80,7 +80,7 @@ export function createCollectHandler(options: CollectOptions = {}) {
 
     const host = req.headers.get("x-forwarded-host") ?? new URL(req.url).host;
     const site = resolveSite(config, options.site ?? (typeof batch.site === "string" ? batch.site : null), host);
-    const bot = detectBot(req.headers.get("user-agent"));
+    const bot = detectClientBot(req.headers.get("user-agent"));
     const events = batch.events.slice(0, LIMITS.eventsPerBatch).filter(validEvent);
     if (!events.length) return reject(400);
 

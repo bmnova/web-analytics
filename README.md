@@ -7,7 +7,7 @@ One small package gives you:
 - **What they did:** pageviews (including SPA navigation), clicks on `data-track` elements, outbound links, custom events, scroll depth, engaged time and exit pages.
 - **Funnels and journeys:** sessions and ordered funnels as BigQuery table functions. Signed-in users and server events (sign-ups, payments) join the same funnel.
 - **Errors:** browser errors and Next.js `onRequestError`, stored next to the funnel.
-- **AI crawlers and bots:** GPTBot, ChatGPT-User, ClaudeBot, PerplexityBot, Googlebot and others, logged from your middleware/proxy, including hits on `robots.txt` and `llms.txt`.
+- **AI crawlers and bots:** GPTBot, ChatGPT-User, ClaudeBot, PerplexityBot, Googlebot and others, logged from your middleware/proxy, including hits on `robots.txt` and `llms.txt`. Automated tools that run your pages' JavaScript but send a user agent without a browser or OS (store reviewers, page checkers) are logged as `unknown-client` bots instead of visitors.
 - **One panel for many sites:** each site writes to its own GCP project; an observer dataset unions them for Looker Studio.
 
 It runs on **Vercel** (Node or Edge) and **Cloudflare Workers via OpenNext**: no Node-only SDKs; BigQuery is called with `fetch` + WebCrypto.

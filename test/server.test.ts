@@ -54,6 +54,11 @@ describe("collect handler", () => {
     expect(logged).toHaveLength(0);
   });
 
+  it("marks clients without a browser or OS in the user agent as bots", async () => {
+    await POST(post({ events: [{ event: "pageview", path: "/", consent: "basic" }] }, { "user-agent": "Mozilla/5.0 (compatible; SiteChecker/2.0)" }));
+    expect(logged[0]).toMatchObject({ is_bot: true, bot_name: "unknown-client", bot_kind: "other", visitor_hash: null, user_agent: "Mozilla/5.0 (compatible; SiteChecker/2.0)" });
+  });
+
   it("allows configured extra origins", async () => {
     const { POST: p2 } = createCollectHandler({ env: { ...env, WA_ALLOWED_ORIGINS: "https://www.example.com" } });
     expect((await p2(post({ events: [{ event: "pageview", path: "/", consent: "basic" }] }, { origin: "https://www.example.com" }))).status).toBe(204);

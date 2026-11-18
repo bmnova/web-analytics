@@ -28,6 +28,16 @@
    ```
    Make one data source per funnel. Steps are event names or `pageview:<path prefix>`.
 
+## Tips from building one
+- **First visit:** Looker Studio asks you to authorize it, then to authorize the BigQuery connector, then for a one-time account setup. Use the Google account that owns the BigQuery projects.
+- **Quick start link:** this URL creates a report already connected to `daily_overview` (replace `my-observer`). Add the other views with *Add data → BigQuery*. Without a template report, the link accepts only one data source.
+  ```
+  https://lookerstudio.google.com/reporting/create?c.mode=edit&ds.connector=bigQuery&ds.type=TABLE&ds.projectId=my-observer&ds.datasetId=all_sites&ds.tableId=daily_overview&ds.billingProjectId=my-observer
+  ```
+- **Same filters on every page:** add a *date range control* and a *drop-down list* on `site`, select each one, then *Arrange → Make report-level*. The site control filters every view because they all have a `site` field.
+- **Averages:** set the aggregation of `avg_session_sec`, `avg_engaged_sec` and `avg_scroll_pct` to *Average*, not *Sum*.
+- **Empty Events page:** `daily_events` leaves out `pageview` and `page_exit`, so it stays empty until the site sends custom events (`track()`, `data-track`, `trackServer()`).
+
 ## Freshness and cost
 - **Freshness:** aggregates refresh hourly; raw `events` are real time if you query them directly.
 - **Cost:** dashboards read only the small `daily_*` tables. The scheduled query scans the last 2 days of raw events per run. Small and medium sites stay within BigQuery's free tier (10 GB storage and 1 TB queries per month).

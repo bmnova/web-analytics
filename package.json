@@ -1,6 +1,6 @@
 {
   "name": "@bmnova/web-analytics",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Privacy-first web analytics for Next.js that writes to your own BigQuery: visitors, channels (incl. ChatGPT/Perplexity), funnels, errors and AI crawler hits.",
   "license": "MIT",
   "type": "module",
