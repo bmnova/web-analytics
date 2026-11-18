@@ -18,6 +18,13 @@ export interface CollectOptions {
 
 const noContent = () => new Response(null, { status: 204 });
 const reject = (status: number) => new Response(null, { status });
+/** Header naming why the collector refused to store events (env var names only, never values). */
+export const ERROR_HEADER = "x-web-analytics-error";
+const misconfigured = (missing: string[]) =>
+  new Response(null, {
+    status: 503,
+    headers: { [ERROR_HEADER]: `missing-config: ${missing.join(", ")}`, "cache-control": "no-store" },
+  });
 
 function originAllowed(req: Request, allowed: string[]): boolean {
   const url = new URL(req.url);
@@ -67,6 +74,8 @@ export function createCollectHandler(options: CollectOptions = {}) {
   async function POST(req: Request): Promise<Response> {
     const config = getConfig(options.env);
     if (!originAllowed(req, config.allowedOrigins)) return reject(403);
+    // Production without BigQuery credentials: fail loudly instead of silently dropping data.
+    if (config.missing.length) return misconfigured(config.missing);
 
     const declared = Number(req.headers.get("content-length") ?? "0");
     if (declared > LIMITS.bodyBytes) return reject(413);

@@ -74,6 +74,8 @@ function insertId(row: EventRow): string {
 /** Stream rows into BigQuery. Never throws: analytics must not break the site. */
 export async function writeRows(config: WaConfig, rows: EventRow[]): Promise<void> {
   if (!rows.length) return;
+  // Misconfigured production: drop rows (the reason was already logged by getConfig) instead of printing them.
+  if (config.missing?.length) return;
   if (config.dryRun || !config.serviceAccount || !config.project) {
     for (const row of rows) console.log("[web-analytics:dry-run]", JSON.stringify(row));
     return;

@@ -8,6 +8,7 @@
    wrangler secret put WA_SALT_SECRET
    ```
    Put the non-secret vars (`WA_SITE`, `WA_BQ_PROJECT`, `WA_BQ_DATASET`) in `wrangler.jsonc` `vars`. For local dev use `.dev.vars`, which is git-ignored here; make sure your app ignores it too.
+   OpenNext builds with `NODE_ENV=production`, so a deployed worker (and `opennextjs-cloudflare preview`) without `WA_GCP_SA_KEY`/`WA_BQ_PROJECT` makes `/api/collect` answer 503 with an `x-web-analytics-error` header instead of silently dropping data. Put `WA_DRY_RUN=1` in `.dev.vars` to dry-run the preview on purpose.
 4. **Geo:** `cf-ipcountry` is always present. For region, enable *Rules → Transform Rules → Managed Transforms → Add visitor location headers*.
 5. **Static files skip the worker:** anything in `public/` (including `robots.txt` and `llms.txt`) is served by Workers static assets without running your proxy, so bot hits on those files are not logged. Serve them from route handlers (`app/robots.ts`, `app/llms.txt/route.ts`), or read Cloudflare's *AI Crawl Control* report for those paths.
 6. **CPU time on the free plan (10 ms):**

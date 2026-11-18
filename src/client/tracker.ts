@@ -183,6 +183,59 @@ function onScroll() {
   if (pct > state.maxScroll) state.maxScroll = pct;
 }
 
+/** File extensions that count as a download when linked on the same origin. */
+export const DOWNLOAD_EXTENSIONS = [
+  "pdf", "zip", "rar", "7z", "gz", "tgz", "tar", "dmg", "pkg", "exe", "msi", "apk", "aab", "ipa", "deb", "rpm", "iso",
+  "csv", "tsv", "txt", "rtf", "xls", "xlsx", "doc", "docx", "ppt", "pptx", "odt", "ods", "odp", "key", "numbers", "pages", "epub",
+  "mp3", "wav", "m4a", "flac", "mp4", "mov", "avi", "mkv", "webm",
+];
+const DOWNLOAD_RE = new RegExp(`\\.(${DOWNLOAD_EXTENSIONS.join("|")})$`, "i");
+const PROP_PATH_LENGTH = 120;
+
+/** Props for a same-origin download link, or null when the link is not a download. Exported for tests. */
+export function downloadProps(a: HTMLAnchorElement, base: string = location.href): Props | null {
+  let url: URL;
+  try {
+    url = new URL(a.href || a.getAttribute("href") || "", base);
+  } catch {
+    return null;
+  }
+  if (!/^https?:$/.test(url.protocol) || url.origin !== new URL(base).origin) return null;
+  const match = DOWNLOAD_RE.exec(url.pathname);
+  if (!match && !a.hasAttribute("download")) return null;
+  const ext = match ? match[1]!.toLowerCase() : (/\.([a-z0-9]{1,8})$/i.exec(url.pathname)?.[1]?.toLowerCase() ?? null);
+  // Path only: query and hash can carry signed tokens.
+  return { ext, path: url.pathname.slice(0, PROP_PATH_LENGTH) };
+}
+
+/** Props for a submitted form: its id or name and action path (host only when it posts to another origin). Field values are never read. Exported for tests. */
+export function formProps(form: HTMLFormElement, submitter: Element | null = null, base: string = location.href): Props | null {
+  if (form.closest("[data-track-ignore]")) return null;
+  // getAttribute, not form.id / form.action: a field named "id" or "action" would shadow those properties.
+  const ident = (form.getAttribute("id") || form.getAttribute("name") || "").slice(0, 64) || null;
+  const rawAction = submitter?.getAttribute("formaction") || form.getAttribute("action") || "";
+  let action: string | null = null;
+  try {
+    const url = new URL(rawAction, base);
+    action = url.origin === new URL(base).origin ? url.pathname.slice(0, PROP_PATH_LENGTH) : url.host.replace(/^www\./, "");
+  } catch {
+    action = null;
+  }
+  return { form: ident, action };
+}
+
+function onSubmit(ev: Event) {
+  if (!state) return;
+  try {
+    const form = ev.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    const props = formProps(form, (ev as SubmitEvent).submitter ?? null);
+    if (props) enqueue("form_submit", props);
+  } catch {
+    // analytics must never break the page
+  }
+}
+
 function onClick(ev: MouseEvent) {
   if (!state) return;
   const target = ev.target as Element | null;
@@ -205,6 +258,8 @@ function onClick(ev: MouseEvent) {
   const href = a.getAttribute("href") ?? "";
   if (/^mailto:/i.test(href)) return enqueue("contact_click", { type: "email" });
   if (/^tel:/i.test(href)) return enqueue("contact_click", { type: "phone" });
+  const download = downloadProps(a);
+  if (download) return enqueue("file_download", download);
   try {
     const url = new URL(a.href, location.href);
     if (/^https?:$/.test(url.protocol) && url.host !== location.host) {
@@ -274,6 +329,7 @@ export function init(options: TrackerOptions) {
   patchHistory();
   addEventListener("scroll", onScroll, { passive: true });
   addEventListener("click", onClick, { capture: true });
+  addEventListener("submit", onSubmit, { capture: true });
   document.addEventListener("visibilitychange", () => {
     if (!state) return;
     if (document.visibilityState === "hidden") {

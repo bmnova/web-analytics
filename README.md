@@ -4,7 +4,7 @@ Privacy-first analytics for Next.js sites that writes straight into **your own B
 One small package gives you:
 
 - **Who came, from where:** channel and source, with AI assistants (ChatGPT, Perplexity, Claude, Gemini, Copilot…) as their own channel next to Google, social, email, paid and referral.
-- **What they did:** pageviews (including SPA navigation), clicks on `data-track` elements, outbound links, custom events, scroll depth, engaged time and exit pages.
+- **What they did:** pageviews (including SPA navigation), clicks on `data-track` elements, custom events, scroll depth, engaged time and exit pages, plus [automatic events](#automatic-events) for outbound links, email/phone links, file downloads and form submits.
 - **Funnels and journeys:** sessions and ordered funnels as BigQuery table functions. Signed-in users and server events (sign-ups, payments) join the same funnel.
 - **Errors:** browser errors and Next.js `onRequestError`, stored next to the funnel.
 - **AI crawlers and bots:** GPTBot, ChatGPT-User, ClaudeBot, PerplexityBot, Googlebot and others, logged from your middleware/proxy, including hits on `robots.txt` and `llms.txt`. Automated tools that run your pages' JavaScript but send a user agent without a browser or OS (store reviewers, page checkers) are logged as `unknown-client` bots instead of visitors.
@@ -72,6 +72,23 @@ track("file_parsed", { success: true, source: "csv" });
 identify(user.id); // after sign-in; identify(null) on sign-out
 ```
 
+#### Automatic events
+
+The tracker records these without any code. They land in `daily_events` like custom events.
+
+| Event | When | Props |
+|---|---|---|
+| `pageview`, `page_exit` | page load and SPA navigation; leaving the page | `engaged_ms`, `scroll_pct` on `page_exit` |
+| `contact_click` | click on a `mailto:` or `tel:` link | `type`: `email` or `phone` (never the address or number) |
+| `outbound_click` | click on a link to another host | `host`, `path` (first 120 chars, no query) |
+| `file_download` | click on a same-origin link ending in a known file extension (`pdf`, `zip`, `dmg`, `apk`, `csv`, `xlsx`, `docx`, `pptx`, `mp4`, …) or with a `download` attribute | `ext`, `path` (first 120 chars, no query) |
+| `form_submit` | any form submit (capture phase, so it fires even if your handler calls `preventDefault`) | `form` (the form's `id`, else `name`), `action` (path for same-origin, host only for other origins) |
+| `error` | uncaught browser errors and unhandled rejections (`trackErrors: false` to turn off) | `message` (200 chars), `source` file name, `line` |
+
+- `form_submit` never reads field values. Add `data-track-ignore` to a form (or a wrapper) to skip it, e.g. login or search forms.
+- An element with `data-track` wins over the automatic click events.
+- `pageview` and `page_exit` are left out of `daily_events`; they feed `daily_pages` instead.
+
 ### 3. Bot and AI-crawler logging
 ```ts
 // Next 14/15: middleware.ts
@@ -121,7 +138,14 @@ createOnRequestError({ site: "x", normalizePath });                   // instrum
 - Not covered: error `props.message` (first 200 chars of the error message) and your own event props. Keep ids and names out of error messages and props. `props.route` on error rows is Next's route pattern and is left as is.
 
 ### 5. Environment
-See [.env.example](.env.example). Without `WA_GCP_SA_KEY` the package runs in **dry-run mode** and prints rows to the log, which is handy locally. Requests with bot user agents (including `curl`) are flagged `is_bot` and never get a `visitor_hash`; test with a browser user agent.
+See [.env.example](.env.example). Without `WA_GCP_SA_KEY` or `WA_BQ_PROJECT` the package runs in **dry-run mode** and prints rows to the log, which is handy locally.
+
+**In production it refuses to dry-run silently.** Production means `VERCEL_ENV=production`, or `NODE_ENV=production` when `VERCEL_ENV` is not set (Cloudflare/OpenNext, self-hosted; Vercel previews are not production). If credentials are missing or `WA_GCP_SA_KEY` is not valid JSON there:
+- `getConfig` logs one `console.error` naming the missing variables (never their values),
+- `/api/collect` answers **503** with `x-web-analytics-error: missing-config: WA_GCP_SA_KEY, WA_BQ_PROJECT`, visible in the browser's network tab,
+- the proxy, `trackServer` and `onRequestError` drop rows instead of printing them.
+
+Pages, the proxy and the build keep working; nothing throws. Set `WA_DRY_RUN=1` to dry-run on purpose (for example in `opennextjs-cloudflare preview` or a production-mode staging build). Requests with bot user agents (including `curl`) are flagged `is_bot` and never get a `visitor_hash`; test with a browser user agent.
 
 | Var | |
 |---|---|
@@ -130,6 +154,7 @@ See [.env.example](.env.example). Without `WA_GCP_SA_KEY` the package runs in **
 | `WA_GCP_SA_KEY` | service-account JSON (raw or base64); needs BigQuery Data Editor on the dataset only |
 | `WA_SALT_SECRET` | random secret for the daily visitor hash (`openssl rand -hex 32`) |
 | `WA_ALLOWED_ORIGINS` | extra origins allowed to post (the site's own origin is always allowed) |
+| `WA_DRY_RUN` | `1` to log rows instead of writing them, even in production |
 
 ## BigQuery setup
 
