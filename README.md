@@ -181,6 +181,23 @@ npx @bmnova/web-analytics observer --project my-observer --sites site-a.web_anal
 ```
 Then follow [docs/dashboard.md](docs/dashboard.md).
 
+## Check a site: `doctor`
+
+Run it in the site's directory to check the whole setup in one go:
+```bash
+npx @bmnova/web-analytics doctor --url https://www.example.com --vercel --project my-site-project
+```
+Each item prints `✓`, `✗` (with a fix) or `!` (warning). The exit code is 1 if anything failed, so it also works in CI.
+
+| Check | What it looks at |
+|---|---|
+| Environment | `WA_*` in `.env`, `.env.local`, `.env.production`; with `--vercel`, the names in `vercel env ls production`. Values are never printed: it only says whether each is set, and checks formats it can read locally (the service-account key must be valid JSON or base64; its `client_email` is shown). |
+| Code | `app/api/collect/route.ts`, `<Analytics>` in a layout, `withAnalytics` in middleware/proxy. |
+| Live site (`--url`) | The page's scripts contain the tracker, and an empty `POST /api/collect` returns 400. A 503 names the missing production variables. Nothing is written. |
+| BigQuery (`bq` CLI) | Dataset and `events` table, the hourly and health scheduled queries, and human (`is_bot = FALSE`) events for the site in the last 24 hours. Read-only. |
+
+Without `WA_BQ_PROJECT` in a local env file, pass `--project` (Vercel values are encrypted and not read). `--dataset`, `--site` and `--dir` override the detected values.
+
 ## Docs
 - **[Add a site, step by step](docs/add-a-site.md)**: start here
 - **[Prompt for an AI coding agent](docs/agent-prompt.md)**: paste it into Claude Code or Cursor to do step 2 for you
